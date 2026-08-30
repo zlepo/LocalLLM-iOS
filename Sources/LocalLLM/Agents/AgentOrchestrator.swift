@@ -62,7 +62,7 @@ public final class AgentOrchestrator: ObservableObject {
     // MARK: - Main Entry Point
     
     /// Process a user prompt, deciding whether to use tools or spawn sub-agents
-    public func process(
+    func process(
         prompt: String,
         conversation: [Message] = []
     ) async throws -> String {
