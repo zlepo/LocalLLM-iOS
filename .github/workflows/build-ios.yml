@@ -22,7 +22,7 @@ jobs:
       - name: Build llama.cpp XCFramework
         run: |
           cd Vendor/llama.cpp
-          ./build-xcframework.sh
+          ./build-xcframework.sh ios-device
           echo "=== llama.cpp build output ==="
           find build-apple -maxdepth 3 -type d -name "*.xcframework" -print
       
