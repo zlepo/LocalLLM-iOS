@@ -19,6 +19,12 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '15.4'
+      - name: Build llama.cpp XCFramework
+        run: |
+          cd Vendor/llama.cpp
+          ./build-xcframework.sh
+          echo "=== llama.cpp build output ==="
+          find build-apple -maxdepth 3 -type d -name "*.xcframework" -print
       
       - name: Prepare Source Files
         run: |
