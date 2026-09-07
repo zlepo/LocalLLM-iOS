@@ -19,7 +19,7 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '15.4'
-            - name: Build llama.cpp XCFramework
+      - name: Build llama.cpp XCFramework
         run: |
           cd Vendor/llama.cpp
           ./build-xcframework.sh ios-device
