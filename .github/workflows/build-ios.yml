@@ -38,7 +38,7 @@ jobs:
             echo ""
             echo "FOUND: $framework"
             du -sh "$framework"
-            find "$framework" -maxdepth 4 -type f -print; echo "=== MODULEMAP ==="; cat "$framework/ios-arm64/llama.framework/Modules/module.modulemap"
+            find "$framework" -maxdepth 4 -type f -print; echo "=== MODULEMAP ==="; cat "$framework/ios-arm64/llama.framework/Modules/module.modulemap"; echo "=== LLAMA HEADERS ==="; find "$framework/ios-arm64/llama.framework/Headers" -maxdepth 2 -type f -print
           done
       
       - name: Prepare Source Files
