@@ -70,7 +70,10 @@ jobs:
               @Published public private(set) var isGenerating = false
               @Published public private(set) var tokensPerSecond: Double = 0
               
-              private init() {}
+          private init() {
+              let testTime = llama_time_us()
+              print("llama.cpp API test: \(testTime)")
+          }
               
               public func loadModel(from path: String? = nil) async throws {
                   try await Task.sleep(nanoseconds: 1_000_000_000)
