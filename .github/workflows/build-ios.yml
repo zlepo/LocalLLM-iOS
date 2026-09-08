@@ -60,6 +60,7 @@ jobs:
           cat > Sources/LocalLLM/LLMEngine.swift << 'SWIFT'
           import Foundation
           import Combine
+        import llama
 
           @MainActor
           public final class LLMEngine: ObservableObject {
