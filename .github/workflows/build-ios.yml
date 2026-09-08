@@ -178,7 +178,9 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=NO
+            ONLY_ACTIVE_ARCH=NO \
+            FRAMEWORK_SEARCH_PATHS="$PWD/Vendor/llama.cpp/build-apple/llama.xcframework/ios-arm64" \
+            OTHER_LDFLAGS="-framework llama -lc++ -framework Accelerate -framework Metal -framework Foundation"
       
       - name: Create IPA
         run: |
