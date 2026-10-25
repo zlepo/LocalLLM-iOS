@@ -75,10 +75,61 @@ jobs:
               print("llama.cpp API test: \(testTime)")
           }
               
-              public func loadModel(from path: String? = nil) async throws {
-                  try await Task.sleep(nanoseconds: 1_000_000_000)
-                  isModelLoaded = true
-              }
+        private var model: OpaquePointer?
+        private var context: OpaquePointer?
+
+        public func loadModel(from path: String? = nil) async throws {
+            guard let path = path else {
+                throw NSError(
+                    domain: "LocalLLM",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "No GGUF model path provided"]
+                )
+            }
+
+            if let context {
+                llama_free(context)
+                self.context = nil
+            }
+
+            if let model {
+                llama_model_free(model)
+                self.model = nil
+            }
+
+            var modelParams = llama_model_default_params()
+
+            guard let loadedModel = llama_model_load_from_file(path, modelParams) else {
+                throw NSError(
+                    domain: "LocalLLM",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to load GGUF model"]
+                )
+            }
+
+            var contextParams = llama_context_default_params()
+            contextParams.n_ctx = 2048
+            contextParams.n_batch = 512
+
+            guard let loadedContext = llama_init_from_model(
+                loadedModel,
+                contextParams
+            ) else {
+                llama_model_free(loadedModel)
+
+                throw NSError(
+                    domain: "LocalLLM",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to create llama context"]
+                )
+            }
+
+            self.model = loadedModel
+            self.context = loadedContext
+            self.isModelLoaded = true
+
+            print("GGUF loaded successfully with real llama.cpp context")
+        }
               
               public func generate(
                   prompt: String,
