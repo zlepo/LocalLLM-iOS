@@ -271,6 +271,7 @@ jobs:
 
           return output
           }
+          }
           SWIFT
 
           echo "=== Source files ready ==="
