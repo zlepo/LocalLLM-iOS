@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 @main
 struct LocalLLMApp: App {
@@ -281,11 +282,13 @@ struct Message: Identifiable {
 // MARK: - Placeholder Views
 
 struct SettingsView: View {
+    @EnvironmentObject var llmEngine: LLMEngine
+    @State private var showModelPicker = false
     var body: some View {
         NavigationStack {
             List {
                 Section("Model") {
-                    Text("Llama 3 8B Q4_K_M")
+                    Button("Choose GGUF Model") { showModelPicker = true }
                     Text("Memory: ~4.5GB")
                 }
                 
@@ -293,6 +296,9 @@ struct SettingsView: View {
                     Text("Metal GPU: Enabled")
                     Text("Threads: 6")
                 }
+            }
+            .fileImporter(isPresented: $showModelPicker, allowedContentTypes: [.data]) { result in
+                if case .success(let url) = result { Task { try? await llmEngine.loadModel(from: url.path) } }
             }
             .navigationTitle("Settings")
         }
@@ -316,3 +322,10 @@ struct MCPConfigView: View {
         }
     }
 }
+
+
+
+
+
+
+
