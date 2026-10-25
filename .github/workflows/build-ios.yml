@@ -241,10 +241,10 @@ jobs:
         run: |
           mkdir -p build/Payload
           cp -r build/LocalLLM.xcarchive/Products/Applications/LocalLLM.app build/Payload/
-        mkdir -p build/Payload/LocalLLM.app/Frameworks
-        cp -R Vendor/llama.cpp/build-apple/llama.xcframework/ios-arm64/llama.framework build/Payload/LocalLLM.app/Frameworks/
+          mkdir -p build/Payload/LocalLLM.app/Frameworks
+          cp -R Vendor/llama.cpp/build-apple/llama.xcframework/ios-arm64/llama.framework build/Payload/LocalLLM.app/Frameworks/
           cd build && zip -r LocalLLM.ipa Payload
-          echo "✅ IPA created"
+          echo "IPA created"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
