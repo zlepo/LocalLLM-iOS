@@ -103,14 +103,7 @@ struct ContentView: View {
     }
     
     private func loadModel() async {
-        do {
-            try await llmEngine.loadModel()
-        } catch {
-            conversation.append(Message(
-                role: .system,
-                content: "⚠️ Failed to load model: \(error.localizedDescription)"
-            ))
-        }
+        await llmEngine.loadSavedModelIfAvailable()
     }
     
     private func sendMessage() {
@@ -139,7 +132,7 @@ struct ContentView: View {
                 await MainActor.run {
                     conversation.append(Message(
                         role: .system,
-                        content: "❌ Error: \(error.localizedDescription)"
+                        content: "âŒ Error: \(error.localizedDescription)"
                     ))
                     isProcessing = false
                 }
@@ -284,21 +277,56 @@ struct Message: Identifiable {
 struct SettingsView: View {
     @EnvironmentObject var llmEngine: LLMEngine
     @State private var showModelPicker = false
+
     var body: some View {
         NavigationStack {
             List {
                 Section("Model") {
-                    Button("Choose GGUF Model") { showModelPicker = true }
+                    Button("Choose GGUF Model") {
+                        showModelPicker = true
+                    }
+                    .disabled(llmEngine.isGenerating)
+
+                    Text(llmEngine.modelStatus)
+                        .foregroundStyle(llmEngine.isModelLoaded ? .green : .secondary)
+
+                    if let error = llmEngine.lastError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
+                    if let modelName = llmEngine.loadedModelName {
+                        Text(modelName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Text("Memory: ~4.5GB")
                 }
-                
+
                 Section("Performance") {
                     Text("Metal GPU: Enabled")
                     Text("Threads: 6")
                 }
             }
-            .fileImporter(isPresented: $showModelPicker, allowedContentTypes: [.data]) { result in
-                if case .success(let url) = result { Task { try? await llmEngine.loadModel(from: url.path) } }
+            .fileImporter(
+                isPresented: $showModelPicker,
+                allowedContentTypes: [.data],
+            ) { result in
+                switch result {
+                case .success(let url):
+                    Task {
+                        do {
+                            try await llmEngine.importModel(from: url)
+                        } catch {
+                            print("GGUF import failed: \(error.localizedDescription)")
+                        }
+                    }
+
+                case .failure(let error):
+                    print("GGUF picker failed: \(error.localizedDescription)")
+                }
             }
             .navigationTitle("Settings")
         }
@@ -322,10 +350,3 @@ struct MCPConfigView: View {
         }
     }
 }
-
-
-
-
-
-
-
