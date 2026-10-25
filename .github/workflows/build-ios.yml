@@ -148,7 +148,7 @@ jobs:
           echo "=== Source files ready ==="
           ls -la Sources/LocalLLM/
       
-      - name: Create Xcode Project
+        - name: Create Xcode Project
         run: |
           mkdir -p LocalLLM.xcodeproj
           
