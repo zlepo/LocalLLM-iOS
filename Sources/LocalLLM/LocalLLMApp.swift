@@ -132,7 +132,7 @@ struct ContentView: View {
                 await MainActor.run {
                     conversation.append(Message(
                         role: .system,
-                        content: "âŒ Error: \(error.localizedDescription)"
+                        content: "ÃƒÂ¢Ã‚ÂÃ…â€™ Error: \(error.localizedDescription)"
                     ))
                     isProcessing = false
                 }
@@ -312,7 +312,7 @@ struct SettingsView: View {
             }
             .fileImporter(
                 isPresented: $showModelPicker,
-                allowedContentTypes: [.data],
+                allowedContentTypes: [.data]
             ) { result in
                 switch result {
                 case .success(let url):
