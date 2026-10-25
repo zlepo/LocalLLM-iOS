@@ -127,18 +127,18 @@ jobs:
 
           self.model = loadedModel
           self.context = loadedContext
-    self.vocab = llama_model_get_vocab(loadedModel)
+        self.vocab = llama_model_get_vocab(loadedModel)
           self.isModelLoaded = true
 
           print("GGUF loaded successfully with real llama.cpp context")
           }
 
-    public func generate(
+        public func generate(
         prompt: String,
         systemPrompt: String? = nil,
         maxTokens: Int = 2048,
         stopSequences: [String] = []
-    ) async throws -> String {
+        ) async throws -> String {
         guard let context = self.context,
               let vocab = self.vocab else {
             throw NSError(
@@ -270,7 +270,7 @@ jobs:
         }
 
         return output
-    }
+        }
           SWIFT
 
           echo "=== Source files ready ==="
