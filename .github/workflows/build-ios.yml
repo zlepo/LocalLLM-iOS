@@ -77,7 +77,7 @@ jobs:
 
           private var model: OpaquePointer?
           private var context: OpaquePointer?
-        private var vocab: OpaquePointer?
+          private var vocab: OpaquePointer?
 
           public func loadModel(from path: String? = nil) async throws {
           guard let path = path else {
@@ -127,43 +127,43 @@ jobs:
 
           self.model = loadedModel
           self.context = loadedContext
-        self.vocab = llama_model_get_vocab(loadedModel)
+          self.vocab = llama_model_get_vocab(loadedModel)
           self.isModelLoaded = true
 
           print("GGUF loaded successfully with real llama.cpp context")
           }
 
-        public func generate(
-        prompt: String,
-        systemPrompt: String? = nil,
-        maxTokens: Int = 2048,
-        stopSequences: [String] = []
-        ) async throws -> String {
-        guard let context = self.context,
+          public func generate(
+          prompt: String,
+          systemPrompt: String? = nil,
+          maxTokens: Int = 2048,
+          stopSequences: [String] = []
+          ) async throws -> String {
+          guard let context = self.context,
               let vocab = self.vocab else {
             throw NSError(
                 domain: "LocalLLM",
                 code: 4,
                 userInfo: [NSLocalizedDescriptionKey: "No GGUF model is loaded"]
             )
-        }
+          }
 
-        isGenerating = true
-        defer { isGenerating = false }
+          isGenerating = true
+          defer { isGenerating = false }
 
-        let fullPrompt: String
-        if let systemPrompt, !systemPrompt.isEmpty {
+          let fullPrompt: String
+          if let systemPrompt, !systemPrompt.isEmpty {
             fullPrompt = "\(systemPrompt)\n\n\(prompt)"
-        } else {
+          } else {
             fullPrompt = prompt
-        }
+          }
 
-        let utf8Count = fullPrompt.utf8.count
-        let tokenCapacity = max(utf8Count + 2, 32)
-        let tokenBuffer = UnsafeMutablePointer<llama_token>.allocate(capacity: tokenCapacity)
-        defer { tokenBuffer.deallocate() }
+          let utf8Count = fullPrompt.utf8.count
+          let tokenCapacity = max(utf8Count + 2, 32)
+          let tokenBuffer = UnsafeMutablePointer<llama_token>.allocate(capacity: tokenCapacity)
+          defer { tokenBuffer.deallocate() }
 
-        let tokenCount = llama_tokenize(
+          let tokenCount = llama_tokenize(
             vocab,
             fullPrompt,
             Int32(utf8Count),
@@ -171,54 +171,54 @@ jobs:
             Int32(tokenCapacity),
             true,
             true
-        )
+          )
 
-        guard tokenCount > 0 else {
+          guard tokenCount > 0 else {
             throw NSError(
                 domain: "LocalLLM",
                 code: 5,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to tokenize prompt"]
             )
-        }
+          }
 
-        var batch = llama_batch_init(Int32(max(Int(tokenCount), 512)), 0, 1)
-        defer { llama_batch_free(batch) }
+          var batch = llama_batch_init(Int32(max(Int(tokenCount), 512)), 0, 1)
+          defer { llama_batch_free(batch) }
 
-        batch.n_tokens = tokenCount
+          batch.n_tokens = tokenCount
 
-        for i in 0..<Int(tokenCount) {
+          for i in 0..<Int(tokenCount) {
             batch.token[i] = tokenBuffer[i]
             batch.pos[i] = Int32(i)
             batch.n_seq_id[i] = 1
             batch.seq_id[i]![0] = 0
             batch.logits[i] = (i == Int(tokenCount) - 1) ? 1 : 0
-        }
+          }
 
-        guard llama_decode(context, batch) == 0 else {
+          guard llama_decode(context, batch) == 0 else {
             throw NSError(
                 domain: "LocalLLM",
                 code: 6,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to decode prompt"]
             )
-        }
+          }
 
-        let samplerParams = llama_sampler_chain_default_params()
-        guard let sampler = llama_sampler_chain_init(samplerParams) else {
+          let samplerParams = llama_sampler_chain_default_params()
+          guard let sampler = llama_sampler_chain_init(samplerParams) else {
             throw NSError(
                 domain: "LocalLLM",
                 code: 7,
                 userInfo: [NSLocalizedDescriptionKey: "Failed to create sampler"]
             )
-        }
-        defer { llama_sampler_free(sampler) }
+          }
+          defer { llama_sampler_free(sampler) }
 
-        llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.7))
-        llama_sampler_chain_add(sampler, llama_sampler_init_dist(1234))
+          llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.7))
+          llama_sampler_chain_add(sampler, llama_sampler_init_dist(1234))
 
-        var output = ""
-        var position = Int32(tokenCount)
+          var output = ""
+          var position = Int32(tokenCount)
 
-        for _ in 0..<maxTokens {
+          for _ in 0..<maxTokens {
             let token = llama_sampler_sample(
                 sampler,
                 context,
@@ -267,10 +267,10 @@ jobs:
             }
 
             position += 1
-        }
+          }
 
-        return output
-        }
+          return output
+          }
           SWIFT
 
           echo "=== Source files ready ==="
