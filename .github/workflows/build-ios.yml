@@ -58,92 +58,92 @@ jobs:
           
           # Create simplified LLMEngine (no llama.cpp for now)
           cat > Sources/LocalLLM/LLMEngine.swift << 'SWIFT'
-          import Foundation
-          import Combine
-          import llama
-        
-          @MainActor
-          public final class LLMEngine: ObservableObject {
-              public static let shared = LLMEngine()
-              
-              @Published public private(set) var isModelLoaded = false
-              @Published public private(set) var isGenerating = false
-              @Published public private(set) var tokensPerSecond: Double = 0
-              
-          private init() {
-              let testTime = llama_time_us()
-              print("llama.cpp API test: \(testTime)")
-          }
-              
-        private var model: OpaquePointer?
-        private var context: OpaquePointer?
-        
-        public func loadModel(from path: String? = nil) async throws {
-            guard let path = path else {
-                throw NSError(
-                    domain: "LocalLLM",
-                    code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "No GGUF model path provided"]
-                )
+            import Foundation
+            import Combine
+            import llama
+          
+            @MainActor
+            public final class LLMEngine: ObservableObject {
+                public static let shared = LLMEngine()
+                
+                @Published public private(set) var isModelLoaded = false
+                @Published public private(set) var isGenerating = false
+                @Published public private(set) var tokensPerSecond: Double = 0
+                
+            private init() {
+                let testTime = llama_time_us()
+                print("llama.cpp API test: \(testTime)")
             }
-        
-            if let context {
-                llama_free(context)
-                self.context = nil
-            }
-        
-            if let model {
-                llama_model_free(model)
-                self.model = nil
-            }
-        
-            var modelParams = llama_model_default_params()
-        
-            guard let loadedModel = llama_model_load_from_file(path, modelParams) else {
-                throw NSError(
-                    domain: "LocalLLM",
-                    code: 2,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to load GGUF model"]
-                )
-            }
-        
-            var contextParams = llama_context_default_params()
-            contextParams.n_ctx = 2048
-            contextParams.n_batch = 512
-        
-            guard let loadedContext = llama_init_from_model(
-                loadedModel,
-                contextParams
-            ) else {
-                llama_model_free(loadedModel)
-        
-                throw NSError(
-                    domain: "LocalLLM",
-                    code: 3,
-                    userInfo: [NSLocalizedDescriptionKey: "Failed to create llama context"]
-                )
-            }
-        
-            self.model = loadedModel
-            self.context = loadedContext
-            self.isModelLoaded = true
-        
-            print("GGUF loaded successfully with real llama.cpp context")
-        }
-              
-              public func generate(
-                  prompt: String,
-                  systemPrompt: String? = nil,
-                  maxTokens: Int = 2048,
-                  stopSequences: [String] = []
-              ) async throws -> String {
-                  isGenerating = true
-                  defer { isGenerating = false }
-                  try await Task.sleep(nanoseconds: 500_000_000)
-                  return "Local LLM placeholder - real inference coming soon!"
+                
+          private var model: OpaquePointer?
+          private var context: OpaquePointer?
+          
+          public func loadModel(from path: String? = nil) async throws {
+              guard let path = path else {
+                  throw NSError(
+                      domain: "LocalLLM",
+                      code: 1,
+                      userInfo: [NSLocalizedDescriptionKey: "No GGUF model path provided"]
+                  )
               }
+          
+              if let context {
+                  llama_free(context)
+                  self.context = nil
+              }
+          
+              if let model {
+                  llama_model_free(model)
+                  self.model = nil
+              }
+          
+              var modelParams = llama_model_default_params()
+          
+              guard let loadedModel = llama_model_load_from_file(path, modelParams) else {
+                  throw NSError(
+                      domain: "LocalLLM",
+                      code: 2,
+                      userInfo: [NSLocalizedDescriptionKey: "Failed to load GGUF model"]
+                  )
+              }
+          
+              var contextParams = llama_context_default_params()
+              contextParams.n_ctx = 2048
+              contextParams.n_batch = 512
+          
+              guard let loadedContext = llama_init_from_model(
+                  loadedModel,
+                  contextParams
+              ) else {
+                  llama_model_free(loadedModel)
+          
+                  throw NSError(
+                      domain: "LocalLLM",
+                      code: 3,
+                      userInfo: [NSLocalizedDescriptionKey: "Failed to create llama context"]
+                  )
+              }
+          
+              self.model = loadedModel
+              self.context = loadedContext
+              self.isModelLoaded = true
+          
+              print("GGUF loaded successfully with real llama.cpp context")
           }
-          SWIFT
+                
+                public func generate(
+                    prompt: String,
+                    systemPrompt: String? = nil,
+                    maxTokens: Int = 2048,
+                    stopSequences: [String] = []
+                ) async throws -> String {
+                    isGenerating = true
+                    defer { isGenerating = false }
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                    return "Local LLM placeholder - real inference coming soon!"
+                }
+            }
+            SWIFT
           
           echo "=== Source files ready ==="
           ls -la Sources/LocalLLM/
@@ -153,70 +153,70 @@ jobs:
           mkdir -p LocalLLM.xcodeproj
           
           cat > LocalLLM.xcodeproj/project.pbxproj << 'EOF'
-          // !$*UTF8*$!
-          {
-            archiveVersion = 1;
-            classes = {};
-            objectVersion = 56;
-            objects = {
-              AAA00001 /* LocalLLMApp.swift */ = {isa = PBXBuildFile; fileRef = AAA00011; };
-              AAA00002 /* LLMEngine.swift */ = {isa = PBXBuildFile; fileRef = AAA00012; };
-              AAA00003 /* MCPManager.swift */ = {isa = PBXBuildFile; fileRef = AAA00013; };
-              AAA00004 /* AgentOrchestrator.swift */ = {isa = PBXBuildFile; fileRef = AAA00014; };
-              
-              AAA00010 /* LocalLLM.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LocalLLM.app; sourceTree = BUILT_PRODUCTS_DIR; };
-              AAA00011 /* LocalLLMApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMApp.swift; sourceTree = "<group>"; };
-              AAA00012 /* LLMEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMEngine.swift; sourceTree = "<group>"; };
-              AAA00013 /* MCPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPManager.swift; sourceTree = "<group>"; };
-              AAA00014 /* AgentOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOrchestrator.swift; sourceTree = "<group>"; };
-              AAA00015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-              
-              AAA00020 = { isa = PBXGroup; children = (AAA00021, AAA00022); sourceTree = "<group>"; };
-              AAA00021 = { isa = PBXGroup; children = (AAA00023); path = Sources; sourceTree = "<group>"; };
-              AAA00022 = { isa = PBXGroup; children = (AAA00010); name = Products; sourceTree = "<group>"; };
-              AAA00023 = { isa = PBXGroup; children = (AAA00011, AAA00012, AAA00013, AAA00014, AAA00015); path = LocalLLM; sourceTree = "<group>"; };
-              
-              AAA00030 /* LocalLLM */ = {
-                isa = PBXNativeTarget;
-                buildConfigurationList = AAA00040;
-                buildPhases = (AAA00031, AAA00032, AAA00033);
-                buildRules = ();
-                dependencies = ();
-                name = LocalLLM;
-                productName = LocalLLM;
-                productReference = AAA00010;
-                productType = "com.apple.product-type.application";
+            // !$*UTF8*$!
+            {
+              archiveVersion = 1;
+              classes = {};
+              objectVersion = 56;
+              objects = {
+                AAA00001 /* LocalLLMApp.swift */ = {isa = PBXBuildFile; fileRef = AAA00011; };
+                AAA00002 /* LLMEngine.swift */ = {isa = PBXBuildFile; fileRef = AAA00012; };
+                AAA00003 /* MCPManager.swift */ = {isa = PBXBuildFile; fileRef = AAA00013; };
+                AAA00004 /* AgentOrchestrator.swift */ = {isa = PBXBuildFile; fileRef = AAA00014; };
+                
+                AAA00010 /* LocalLLM.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LocalLLM.app; sourceTree = BUILT_PRODUCTS_DIR; };
+                AAA00011 /* LocalLLMApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMApp.swift; sourceTree = "<group>"; };
+                AAA00012 /* LLMEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMEngine.swift; sourceTree = "<group>"; };
+                AAA00013 /* MCPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPManager.swift; sourceTree = "<group>"; };
+                AAA00014 /* AgentOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentOrchestrator.swift; sourceTree = "<group>"; };
+                AAA00015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+                
+                AAA00020 = { isa = PBXGroup; children = (AAA00021, AAA00022); sourceTree = "<group>"; };
+                AAA00021 = { isa = PBXGroup; children = (AAA00023); path = Sources; sourceTree = "<group>"; };
+                AAA00022 = { isa = PBXGroup; children = (AAA00010); name = Products; sourceTree = "<group>"; };
+                AAA00023 = { isa = PBXGroup; children = (AAA00011, AAA00012, AAA00013, AAA00014, AAA00015); path = LocalLLM; sourceTree = "<group>"; };
+                
+                AAA00030 /* LocalLLM */ = {
+                  isa = PBXNativeTarget;
+                  buildConfigurationList = AAA00040;
+                  buildPhases = (AAA00031, AAA00032, AAA00033);
+                  buildRules = ();
+                  dependencies = ();
+                  name = LocalLLM;
+                  productName = LocalLLM;
+                  productReference = AAA00010;
+                  productType = "com.apple.product-type.application";
+                };
+                AAA00031 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AAA00001, AAA00002, AAA00003, AAA00004); runOnlyForDeploymentPostprocessing = 0; };
+                AAA00032 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+                AAA00033 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+                
+                AAA00050 /* Project object */ = {
+                  isa = PBXProject;
+                  attributes = { BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1540; LastUpgradeCheck = 1540; TargetAttributes = { AAA00030 = { CreatedOnToolsVersion = 15.4; }; }; };
+                  buildConfigurationList = AAA00051;
+                  compatibilityVersion = "Xcode 14.0";
+                  developmentRegion = en;
+                  hasScannedForEncodings = 0;
+                  knownRegions = (en, Base);
+                  mainGroup = AAA00020;
+                  productRefGroup = AAA00022;
+                  projectDirPath = "";
+                  projectRoot = "";
+                  targets = (AAA00030);
+                };
+                
+                AAA00060 /* Debug */ = { isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CODE_SIGN_IDENTITY = ""; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_STRICT_OBJC_MSGSEND = YES; ENABLE_TESTABILITY = YES; GCC_DYNAMIC_NO_PIC = NO; GCC_OPTIMIZATION_LEVEL = 0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE; MTL_FAST_MATH = YES; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 5.0; }; name = Debug; };
+                AAA00061 /* Release */ = { isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CODE_SIGN_IDENTITY = ""; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; ENABLE_NS_ASSERTIONS = NO; ENABLE_STRICT_OBJC_MSGSEND = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MTL_ENABLE_DEBUG_INFO = NO; MTL_FAST_MATH = YES; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 5.0; VALIDATE_PRODUCT = YES; }; name = Release; };
+                AAA00062 /* Debug */ = { isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_IDENTITY = ""; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = Sources/LocalLLM/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = LocalLLM; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks"); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = "com.localllm.ios"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+                AAA00063 /* Release */ = { isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_IDENTITY = ""; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = Sources/LocalLLM/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = LocalLLM; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks"); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = "com.localllm.ios"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+                
+                AAA00040 = { isa = XCConfigurationList; buildConfigurations = (AAA00062, AAA00063); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+                AAA00051 = { isa = XCConfigurationList; buildConfigurations = (AAA00060, AAA00061); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
               };
-              AAA00031 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AAA00001, AAA00002, AAA00003, AAA00004); runOnlyForDeploymentPostprocessing = 0; };
-              AAA00032 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-              AAA00033 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-              
-              AAA00050 /* Project object */ = {
-                isa = PBXProject;
-                attributes = { BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1540; LastUpgradeCheck = 1540; TargetAttributes = { AAA00030 = { CreatedOnToolsVersion = 15.4; }; }; };
-                buildConfigurationList = AAA00051;
-                compatibilityVersion = "Xcode 14.0";
-                developmentRegion = en;
-                hasScannedForEncodings = 0;
-                knownRegions = (en, Base);
-                mainGroup = AAA00020;
-                productRefGroup = AAA00022;
-                projectDirPath = "";
-                projectRoot = "";
-                targets = (AAA00030);
-              };
-              
-              AAA00060 /* Debug */ = { isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CODE_SIGN_IDENTITY = ""; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_STRICT_OBJC_MSGSEND = YES; ENABLE_TESTABILITY = YES; GCC_DYNAMIC_NO_PIC = NO; GCC_OPTIMIZATION_LEVEL = 0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE; MTL_FAST_MATH = YES; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 5.0; }; name = Debug; };
-              AAA00061 /* Release */ = { isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CODE_SIGN_IDENTITY = ""; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; ENABLE_NS_ASSERTIONS = NO; ENABLE_STRICT_OBJC_MSGSEND = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MTL_ENABLE_DEBUG_INFO = NO; MTL_FAST_MATH = YES; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 5.0; VALIDATE_PRODUCT = YES; }; name = Release; };
-              AAA00062 /* Debug */ = { isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_IDENTITY = ""; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = Sources/LocalLLM/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = LocalLLM; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks"); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = "com.localllm.ios"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-              AAA00063 /* Release */ = { isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_IDENTITY = ""; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = Sources/LocalLLM/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = LocalLLM; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks"); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = "com.localllm.ios"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
-              
-              AAA00040 = { isa = XCConfigurationList; buildConfigurations = (AAA00062, AAA00063); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-              AAA00051 = { isa = XCConfigurationList; buildConfigurations = (AAA00060, AAA00061); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-            };
-            rootObject = AAA00050;
-          }
-          EOF
+              rootObject = AAA00050;
+            }
+            EOF
           
           echo "✅ Xcode project created"
       
