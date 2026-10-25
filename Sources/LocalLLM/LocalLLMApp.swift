@@ -125,14 +125,19 @@ struct ContentView: View {
                 )
                 
                 await MainActor.run {
-                    conversation.append(Message(role: .assistant, content: response))
+                    let visibleResponse = response.replacingOccurrences(
+    of: #"(?s)<think>.*?</think>\s*"#,
+    with: "",
+    options: .regularExpression
+)
+conversation.append(Message(role: .assistant, content: visibleResponse))
                     isProcessing = false
                 }
             } catch {
                 await MainActor.run {
                     conversation.append(Message(
                         role: .system,
-                        content: "ÃƒÂ¢Ã‚ÂÃ…â€™ Error: \(error.localizedDescription)"
+                        content: "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error: \(error.localizedDescription)"
                     ))
                     isProcessing = false
                 }
