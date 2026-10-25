@@ -77,7 +77,7 @@ jobs:
 
           private var model: OpaquePointer?
           private var context: OpaquePointer?
-    private var vocab: OpaquePointer?
+        private var vocab: OpaquePointer?
 
           public func loadModel(from path: String? = nil) async throws {
           guard let path = path else {
