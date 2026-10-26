@@ -117,7 +117,7 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showChatHistory) {
                 ChatHistoryView(
-                    chats: chats,
+                    chats: chatSessions,
                     activeChatID: activeChatID,
                     onSelect: { chatID in
                         selectChat(chatID)
@@ -490,7 +490,7 @@ struct ChatHistoryView: View {
                                     HStack(spacing: 6) {
                                         Text(chat.updatedAt, style: .date)
 
-                                        Text("•")
+                                        Text("â€¢")
 
                                         Text("\(chat.messages.count) messages")
                                     }
