@@ -458,6 +458,7 @@ struct ChatHistoryView: View {
     let chats: [ChatSession]
     let activeChatID: UUID?
     let onSelect: (UUID) -> Void
+    let onNewChat: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -490,7 +491,7 @@ struct ChatHistoryView: View {
                                     HStack(spacing: 6) {
                                         Text(chat.updatedAt, style: .date)
 
-                                        Text("â€¢")
+                                        Text("Ã¢â‚¬Â¢")
 
                                         Text("\(chat.messages.count) messages")
                                     }
