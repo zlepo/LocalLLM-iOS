@@ -56,6 +56,8 @@ struct ContentView: View {
                         .padding()
                     }
                     .onChange(of: conversation.count) { _, _ in
+                        saveConversation()
+
                         if let last = conversation.last {
                             withAnimation {
                                 proxy.scrollTo(last.id, anchor: .bottom)
@@ -97,11 +99,60 @@ struct ContentView: View {
                 MCPConfigView()
             }
             .task {
+                loadConversation()
                 await loadModel()
             }
         }
     }
     
+
+    private var conversationFileURL: URL? {
+        do {
+            let directory = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+
+            return directory.appendingPathComponent("conversation.json")
+        } catch {
+            print("Conversation directory error: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func loadConversation() {
+        guard let url = conversationFileURL,
+              FileManager.default.fileExists(atPath: url.path) else {
+            return
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            conversation = try JSONDecoder().decode([Message].self, from: data)
+            print("Restored \(conversation.count) messages")
+        } catch {
+            print("Conversation restore failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveConversation() {
+        guard let url = conversationFileURL else { return }
+
+        do {
+            let data = try JSONEncoder().encode(conversation)
+            try data.write(to: url, options: .atomic)
+            print("Saved \(conversation.count) messages")
+        } catch {
+            print("Conversation save failed: \(error.localizedDescription)")
+        }
+    }
     private func loadModel() async {
         await llmEngine.loadSavedModelIfAvailable()
     }
@@ -137,7 +188,7 @@ conversation.append(Message(role: .assistant, content: visibleResponse))
                 await MainActor.run {
                     conversation.append(Message(
                         role: .system,
-                        content: "ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ Error: \(error.localizedDescription)"
+                        content: "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Error: \(error.localizedDescription)"
                     ))
                     isProcessing = false
                 }
@@ -263,14 +314,28 @@ struct ThinkingIndicator: View {
 
 // MARK: - Data Models
 
-struct Message: Identifiable {
-    let id = UUID()
+struct Message: Identifiable, Codable {
+    let id: UUID
     let role: Role
     let content: String
-    var agentInfo: String? = nil
-    let timestamp = Date()
-    
-    enum Role {
+    var agentInfo: String?
+    let timestamp: Date
+
+    init(
+        id: UUID = UUID(),
+        role: Role,
+        content: String,
+        agentInfo: String? = nil,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.agentInfo = agentInfo
+        self.timestamp = timestamp
+    }
+
+    enum Role: String, Codable {
         case user
         case assistant
         case system
