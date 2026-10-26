@@ -66,57 +66,29 @@ public final class AgentOrchestrator: ObservableObject {
         prompt: String,
         conversation: [Message] = []
     ) async throws -> String {
-        // Build context from conversation
+        // Normal chat goes directly to the model.
+        // Agent/tool routing remains available below for future MCP use.
         let context = buildContext(conversation)
-        
-        // First pass: let LLM analyze the task
-        let analysisPrompt = """
-        Analyze this task and determine the best approach:
-        
-        USER REQUEST: \(prompt)
-        
-        AVAILABLE TOOLS:
-        \(mcp.toolsPrompt())
-        
-        OPTIONS:
-        1. DIRECT - Answer directly from knowledge
-        2. TOOL - Use a specific tool
-        3. MULTI_TOOL - Use multiple tools in sequence
-        4. PARALLEL - Spawn parallel sub-agents for independent subtasks
-        
-        Respond with:
-        <analysis>
-        approach: [DIRECT|TOOL|MULTI_TOOL|PARALLEL]
-        reasoning: [why this approach]
-        </analysis>
-        
-        If TOOL or MULTI_TOOL:
-        <tools>
-        - tool_name: [name]
-          arguments: [args as yaml]
-        </tools>
-        
-        If PARALLEL:
-        <subtasks>
-        - name: [subtask name]
-          prompt: [prompt for sub-agent]
-        </subtasks>
-        """
-        
-        let analysis = try await llm.generate(
-            prompt: analysisPrompt,
+
+        let directPrompt: String
+        if context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            directPrompt = prompt
+        } else {
+            directPrompt = """
+            CONVERSATION:
+            \(context)
+
+            CURRENT USER MESSAGE:
+            \(prompt)
+            """
+        }
+
+        return try await llm.generate(
+            prompt: directPrompt,
             systemPrompt: systemPrompt,
             maxTokens: 1024
         )
-        
-        // Parse and execute based on analysis
-        return try await executeBasedOnAnalysis(
-            analysis: analysis,
-            originalPrompt: prompt,
-            context: context
-        )
     }
-    
     // MARK: - Execution Strategies
     
     private func executeBasedOnAnalysis(
@@ -473,7 +445,7 @@ public final class AgentOrchestrator: ObservableObject {
     // MARK: - Context Building
     
     private func buildContext(_ conversation: [Message]) -> String {
-        let recentMessages = conversation.suffix(10)
+        let recentMessages = conversation.suffix(4)
         return recentMessages.map { msg in
             let role = msg.role == .user ? "User" : "Assistant"
             return "\(role): \(msg.content)"
@@ -485,20 +457,25 @@ public final class AgentOrchestrator: ObservableObject {
     private var systemPrompt: String {
         """
         You are a helpful AI assistant running locally on the user's device.
-        
+
+        Answer the user's actual question directly and clearly.
+        Prefer a short, useful answer unless the user asks for more detail.
+        Use prior conversation only when it is relevant to the current question.
+
+        REASONING RULES:
+        - Think through the problem, but do not expose internal chain-of-thought.
+        - Do not repeatedly reconsider the same possibilities.
+        - Do not invent alternate interpretations when the user's intent is clear.
+        - If uncertain, state the uncertainty briefly instead of rambling.
+        - Stop once the question has been answered.
+
         CAPABILITIES:
         - Direct knowledge and reasoning
-        - Tool usage via MCP servers (when connected)
-        - Spawning sub-agents for parallel tasks
-        - Multi-step task chains
-        
-        PRINCIPLES:
-        - Be concise but thorough
-        - Use tools when they provide real value
-        - Spawn sub-agents only when tasks are truly independent
-        - Always synthesize results into a coherent response
-        
-        You have NO token limits. You run locally. Go wild.
+        - Tool usage via MCP servers when connected
+        - Sub-agents for genuinely independent complex tasks
+        - Multi-step task execution when necessary
+
+        Be accurate, conversational, concise, and useful.
         """
     }
 }

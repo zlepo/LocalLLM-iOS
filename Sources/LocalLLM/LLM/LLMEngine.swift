@@ -142,6 +142,7 @@ self.vocab = nil
 }
 
 var modelParams = llama_model_default_params()
+modelParams.n_gpu_layers = -2
 
 guard let loadedModel = llama_model_load_from_file(path, modelParams) else {
 throw NSError(
@@ -167,6 +168,8 @@ code: 3,
 userInfo: [NSLocalizedDescriptionKey: "Failed to create llama context"]
 )
 }
+
+llama_set_n_threads(loadedContext, 6, 6)
 
 self.model = loadedModel
 self.context = loadedContext
@@ -383,7 +386,9 @@ guard let sampler = llama_sampler_chain_init(samplerParams) else {
 
 defer { llama_sampler_free(sampler) }
 
-llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.7))
+llama_sampler_chain_add(sampler, llama_sampler_init_top_k(20))
+llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95, 1))
+llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.6))
 llama_sampler_chain_add(sampler, llama_sampler_init_dist(UInt32.random(in: 0...UInt32.max)))
 
 var output = ""
@@ -454,6 +459,37 @@ for _ in 0..<generationLimit {
     position += 1
 }
 
-return output.trimmingCharacters(in: .whitespacesAndNewlines)
+let cleanedOutput = cleanModelOutput(output)
+
+return cleanedOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func cleanModelOutput(_ text: String) -> String {
+    var cleaned = text
+
+    // Remove complete Qwen-style reasoning blocks.
+    while let start = cleaned.range(of: "<think>", options: .caseInsensitive),
+          let end = cleaned.range(
+              of: "</think>",
+              options: .caseInsensitive,
+              range: start.upperBound..<cleaned.endIndex
+          ) {
+        cleaned.removeSubrange(start.lowerBound..<end.upperBound)
+    }
+
+    // If generation stopped while still inside a reasoning block,
+    // never expose the unfinished internal reasoning.
+    if let start = cleaned.range(of: "<think>", options: .caseInsensitive) {
+        cleaned.removeSubrange(start.lowerBound..<cleaned.endIndex)
+    }
+
+    // Defensive cleanup in case a closing tag appears by itself.
+    cleaned = cleaned.replacingOccurrences(
+        of: "</think>",
+        with: "",
+        options: .caseInsensitive
+    )
+
+    return cleaned
 }
 }

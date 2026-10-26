@@ -26,9 +26,12 @@ struct ContentView: View {
     
     @State private var inputText: String = ""
     @State private var conversation: [Message] = []
+    @State private var chatSessions: [ChatSession] = []
+    @State private var activeChatID: UUID?
     @State private var isProcessing: Bool = false
     @State private var showSettings: Bool = false
     @State private var showMCPConfig: Bool = false
+    @State private var showChatHistory: Bool = false
     
     var body: some View {
         NavigationStack {
@@ -84,6 +87,20 @@ struct ContentView: View {
                     }
                 }
                 
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        showChatHistory = true
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                    }
+
+                    Button {
+                        startNewChat()
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showSettings = true
@@ -98,6 +115,20 @@ struct ContentView: View {
             .sheet(isPresented: $showMCPConfig) {
                 MCPConfigView()
             }
+            .sheet(isPresented: $showChatHistory) {
+                ChatHistoryView(
+                    chats: chats,
+                    activeChatID: activeChatID,
+                    onSelect: { chatID in
+                        selectChat(chatID)
+                        showChatHistory = false
+                    },
+                    onNewChat: {
+                        startNewChat()
+                        showChatHistory = false
+                    }
+                )
+            }
             .task {
                 loadConversation()
                 await loadModel()
@@ -106,7 +137,7 @@ struct ContentView: View {
     }
     
 
-    private var conversationFileURL: URL? {
+    private var applicationSupportDirectory: URL? {
         do {
             let directory = try FileManager.default.url(
                 for: .applicationSupportDirectory,
@@ -120,39 +151,155 @@ struct ContentView: View {
                 withIntermediateDirectories: true
             )
 
-            return directory.appendingPathComponent("conversation.json")
+            return directory
         } catch {
-            print("Conversation directory error: \(error.localizedDescription)")
+            print("Chat storage directory error: \(error.localizedDescription)")
             return nil
         }
     }
 
+    private var chatsFileURL: URL? {
+        applicationSupportDirectory?.appendingPathComponent("chats.json")
+    }
+
+    private var legacyConversationFileURL: URL? {
+        applicationSupportDirectory?.appendingPathComponent("conversation.json")
+    }
+
     private func loadConversation() {
-        guard let url = conversationFileURL,
-              FileManager.default.fileExists(atPath: url.path) else {
+        if let chatsURL = chatsFileURL,
+           FileManager.default.fileExists(atPath: chatsURL.path) {
+            do {
+                let data = try Data(contentsOf: chatsURL)
+                chatSessions = try JSONDecoder().decode([ChatSession].self, from: data)
+
+                if let mostRecent = chatSessions.max(by: { $0.updatedAt < $1.updatedAt }) {
+                    activeChatID = mostRecent.id
+                    conversation = mostRecent.messages
+                }
+
+                print("Restored \(chatSessions.count) chat sessions")
+                return
+            } catch {
+                print("Chat history restore failed: \(error.localizedDescription)")
+            }
+        }
+
+        migrateLegacyConversationIfNeeded()
+    }
+
+    private func migrateLegacyConversationIfNeeded() {
+        guard let legacyURL = legacyConversationFileURL,
+              FileManager.default.fileExists(atPath: legacyURL.path) else {
             return
         }
 
         do {
-            let data = try Data(contentsOf: url)
-            conversation = try JSONDecoder().decode([Message].self, from: data)
-            print("Restored \(conversation.count) messages")
+            let data = try Data(contentsOf: legacyURL)
+            let legacyMessages = try JSONDecoder().decode([Message].self, from: data)
+
+            guard !legacyMessages.isEmpty else { return }
+
+            let firstUserText = legacyMessages.first(where: { $0.role == .user })?.content
+            let migratedTitle = makeChatTitle(from: firstUserText ?? "Previous Chat")
+
+            let migratedChat = ChatSession(
+                title: migratedTitle,
+                messages: legacyMessages
+            )
+
+            chatSessions = [migratedChat]
+            activeChatID = migratedChat.id
+            conversation = legacyMessages
+
+            saveChats()
+
+            print("Migrated legacy conversation with \(legacyMessages.count) messages")
         } catch {
-            print("Conversation restore failed: \(error.localizedDescription)")
+            print("Legacy conversation migration failed: \(error.localizedDescription)")
         }
     }
 
     private func saveConversation() {
-        guard let url = conversationFileURL else { return }
+        guard !conversation.isEmpty else { return }
+
+        if let activeChatID,
+           let index = chatSessions.firstIndex(where: { $0.id == activeChatID }) {
+            chatSessions[index].messages = conversation
+            chatSessions[index].updatedAt = Date()
+
+            if chatSessions[index].title == "New Chat",
+               let firstUserText = conversation.first(where: { $0.role == .user })?.content {
+                chatSessions[index].title = makeChatTitle(from: firstUserText)
+            }
+        } else {
+            let title = makeChatTitle(
+                from: conversation.first(where: { $0.role == .user })?.content ?? "New Chat"
+            )
+
+            let chat = ChatSession(
+                title: title,
+                messages: conversation
+            )
+
+            chatSessions.append(chat)
+            activeChatID = chat.id
+        }
+
+        saveChats()
+    }
+
+    private func saveChats() {
+        guard let url = chatsFileURL else { return }
 
         do {
-            let data = try JSONEncoder().encode(conversation)
+            let data = try JSONEncoder().encode(chatSessions)
             try data.write(to: url, options: .atomic)
-            print("Saved \(conversation.count) messages")
+            print("Saved \(chatSessions.count) chat sessions")
         } catch {
-            print("Conversation save failed: \(error.localizedDescription)")
+            print("Chat history save failed: \(error.localizedDescription)")
         }
     }
+
+    private func makeChatTitle(from text: String) -> String {
+        let cleaned = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\n", with: " ")
+
+        guard !cleaned.isEmpty else { return "New Chat" }
+
+        if cleaned.count <= 40 {
+            return cleaned
+        }
+
+        return String(cleaned.prefix(40)) + "..."
+    }
+
+    private func startNewChat() {
+        guard !isProcessing else { return }
+
+        saveConversation()
+
+        conversation = []
+        activeChatID = nil
+        inputText = ""
+    }
+
+    private func selectChat(_ chatID: UUID) {
+        guard !isProcessing else { return }
+        guard chatID != activeChatID else { return }
+        guard let selectedChat = chatSessions.first(where: { $0.id == chatID }) else {
+            print("Selected chat no longer exists")
+            return
+        }
+
+        saveConversation()
+
+        activeChatID = selectedChat.id
+        conversation = selectedChat.messages
+        inputText = ""
+    }
+
     private func loadModel() async {
         await llmEngine.loadSavedModelIfAvailable()
     }
@@ -172,23 +319,18 @@ struct ContentView: View {
                 // Route through orchestrator - it decides if sub-agents are needed
                 let response = try await orchestrator.process(
                     prompt: prompt,
-                    conversation: conversation
+                    conversation: Array(conversation.dropLast())
                 )
                 
                 await MainActor.run {
-                    let visibleResponse = response.replacingOccurrences(
-    of: #"(?s)<think>.*?</think>\s*"#,
-    with: "",
-    options: .regularExpression
-)
-conversation.append(Message(role: .assistant, content: visibleResponse))
+                    conversation.append(Message(role: .assistant, content: response))
                     isProcessing = false
                 }
             } catch {
                 await MainActor.run {
                     conversation.append(Message(
                         role: .system,
-                        content: "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Error: \(error.localizedDescription)"
+                        content: "Error: \(error.localizedDescription)"
                     ))
                     isProcessing = false
                 }
@@ -312,6 +454,79 @@ struct ThinkingIndicator: View {
     }
 }
 
+struct ChatHistoryView: View {
+    let chats: [ChatSession]
+    let activeChatID: UUID?
+    let onSelect: (UUID) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var sortedChats: [ChatSession] {
+        chats.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if sortedChats.isEmpty {
+                    ContentUnavailableView(
+                        "No Chat History",
+                        systemImage: "bubble.left.and.bubble.right",
+                        description: Text("Your saved conversations will appear here.")
+                    )
+                } else {
+                    List(sortedChats) { chat in
+                        Button {
+                            onSelect(chat.id)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(chat.title)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(2)
+
+                                    HStack(spacing: 6) {
+                                        Text(chat.updatedAt, style: .date)
+
+                                        Text("•")
+
+                                        Text("\(chat.messages.count) messages")
+                                    }
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                if chat.id == activeChatID {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.blue)
+                                } else {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("Chat History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
 // MARK: - Data Models
 
 struct Message: Identifiable, Codable {
@@ -342,6 +557,27 @@ struct Message: Identifiable, Codable {
     }
 }
 
+struct ChatSession: Identifiable, Codable {
+    let id: UUID
+    var title: String
+    var messages: [Message]
+    let createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        title: String = "New Chat",
+        messages: [Message] = [],
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.messages = messages
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
 // MARK: - Placeholder Views
 
 struct SettingsView: View {
