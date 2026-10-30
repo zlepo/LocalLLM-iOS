@@ -53,7 +53,7 @@ struct ContentView: View {
                             }
                             
                             if isProcessing {
-                                ThinkingIndicator()
+                                ThinkingIndicator(label: orchestrator.statusText ?? "Thinking")
                             }
                         }
                         .padding()
@@ -437,11 +437,12 @@ struct InputBar: View {
 }
 
 struct ThinkingIndicator: View {
+    var label = "Thinking"
     @State private var dots = 0
-    
+
     var body: some View {
         HStack {
-            Text("Thinking" + String(repeating: ".", count: dots))
+            Text(label + String(repeating: ".", count: dots))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -584,6 +585,8 @@ struct ChatSession: Identifiable, Codable {
 struct SettingsView: View {
     @EnvironmentObject var llmEngine: LLMEngine
     @State private var showModelPicker = false
+    @AppStorage(WebSearch.enabledKey) private var webSearchEnabled = true
+    @AppStorage(WebSearch.braveKeyKey) private var braveAPIKey = ""
 
     var body: some View {
         NavigationStack {
@@ -610,6 +613,17 @@ struct SettingsView: View {
                     }
 
                     Text("Memory: ~4.5GB")
+                }
+
+                Section {
+                    Toggle("Search the web for facts", isOn: $webSearchEnabled)
+                    SecureField("Brave Search API key (optional)", text: $braveAPIKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Web Search")
+                } footer: {
+                    Text("Uses Brave Search when a key is set, otherwise DuckDuckGo. Safe search is off.")
                 }
 
                 Section("Performance") {
