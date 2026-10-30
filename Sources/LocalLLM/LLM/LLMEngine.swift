@@ -53,6 +53,13 @@ private static let savedModelPathKey = "LocalLLM.savedModelPath"
 private static let gpuLayersKey = "LocalLLM.gpuLayers"
 private var activeGPULayers: Int32 = -1
 
+// Context window in tokens. Qwen3.5 only keeps KV for 8 of 32 layers, so 16k costs ~512 MiB.
+// Override with LocalLLM.contextSize in the app's preferences.
+nonisolated public static var configuredContextSize: Int {
+    let value = UserDefaults.standard.integer(forKey: "LocalLLM.contextSize")
+    return value > 0 ? value : 16384
+}
+
 private init() {
 installLlamaLogCapture()
 let testTime = llama_time_us()
@@ -203,7 +210,7 @@ userInfo: [NSLocalizedDescriptionKey: "Failed to load GGUF model"]
 }
 
 var contextParams = llama_context_default_params()
-contextParams.n_ctx = 2048
+contextParams.n_ctx = UInt32(Self.configuredContextSize)
 contextParams.n_batch = 512
 
 guard let loadedContext = llama_init_from_model(

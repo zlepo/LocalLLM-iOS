@@ -445,11 +445,19 @@ public final class AgentOrchestrator: ObservableObject {
     // MARK: - Context Building
     
     private func buildContext(_ conversation: [Message]) -> String {
-        let recentMessages = conversation.suffix(4)
-        return recentMessages.map { msg in
+        // Keep as much recent history as fits the context window, leaving room for the
+        // system prompt and up to 2048 output tokens. ~3 chars/token is a safe estimate.
+        let budgetTokens = max(512, LLMEngine.configuredContextSize - 2048 - 1024)
+        var remainingChars = budgetTokens * 3
+        var lines: [String] = []
+        for msg in conversation.reversed() {
             let role = msg.role == .user ? "User" : "Assistant"
-            return "\(role): \(msg.content)"
-        }.joined(separator: "\n")
+            let line = "\(role): \(msg.content)"
+            if line.count > remainingChars { break }
+            remainingChars -= line.count + 1
+            lines.append(line)
+        }
+        return lines.reversed().joined(separator: "\n")
     }
     
     // MARK: - System Prompt
