@@ -2,6 +2,42 @@ import Foundation
 import Combine
 import llama
 
+// MARK: - llama.cpp log capture (diagnostics)
+// llama.cpp writes its real error reasons to stderr, which is invisible on iOS.
+// This mirrors every llama.cpp/ggml log line into Documents/llama.log.
+
+private let llamaLogLock = NSLock()
+private var llamaLogHandle: FileHandle?
+
+public var llamaLogFileURL: URL {
+    let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    return documents.appendingPathComponent("llama.log")
+}
+
+func appendLlamaLog(_ text: String) {
+    llamaLogLock.lock()
+    defer { llamaLogLock.unlock() }
+
+    if llamaLogHandle == nil {
+        let url = llamaLogFileURL
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        llamaLogHandle = try? FileHandle(forWritingTo: url)
+    }
+
+    if let data = text.data(using: .utf8) {
+        llamaLogHandle?.write(data)
+    }
+}
+
+private func installLlamaLogCapture() {
+    appendLlamaLog("=== LocalLLM launch \(Date()) ===\n")
+
+    llama_log_set({ level, text, _ in
+        guard let text else { return }
+        appendLlamaLog(String(cString: text))
+    }, nil)
+}
+
 @MainActor
 public final class LLMEngine: ObservableObject {
 public static let shared = LLMEngine()
@@ -14,8 +50,11 @@ public static let shared = LLMEngine()
 @Published public private(set) var lastError: String?
 
 private static let savedModelPathKey = "LocalLLM.savedModelPath"
+private static let gpuLayersKey = "LocalLLM.gpuLayers"
+private var activeGPULayers: Int32 = -1
 
 private init() {
+installLlamaLogCapture()
 let testTime = llama_time_us()
 print("llama.cpp API test: \(testTime)")
 }
@@ -142,7 +181,18 @@ self.vocab = nil
 }
 
 var modelParams = llama_model_default_params()
-modelParams.n_gpu_layers = -2
+
+// Diagnostic override: set LocalLLM.gpuLayers in the app's preferences
+// (0 = CPU only, -1 = all layers on Metal). Default is all layers on Metal.
+let gpuLayers: Int32
+if UserDefaults.standard.object(forKey: Self.gpuLayersKey) != nil {
+    gpuLayers = Int32(UserDefaults.standard.integer(forKey: Self.gpuLayersKey))
+} else {
+    gpuLayers = -1
+}
+modelParams.n_gpu_layers = gpuLayers
+self.activeGPULayers = gpuLayers
+appendLlamaLog("[LocalLLM] loading \(URL(fileURLWithPath: path).lastPathComponent) with n_gpu_layers=\(gpuLayers)\n")
 
 guard let loadedModel = llama_model_load_from_file(path, modelParams) else {
 throw NSError(
@@ -181,6 +231,7 @@ self.lastError = nil
 UserDefaults.standard.set(path, forKey: Self.savedModelPathKey)
 
 print("GGUF loaded successfully with real llama.cpp context")
+appendLlamaLog("[LocalLLM] model loaded, n_ctx=\(llama_n_ctx(loadedContext)), n_gpu_layers=\(activeGPULayers)\n")
 }
 
 public func generate(
@@ -342,6 +393,7 @@ guard availableOutput > 0 else {
 }
 
 let generationLimit = min(requestedOutput, availableOutput)
+appendLlamaLog("[LocalLLM] generate: promptTokens=\(tokens.count), n_ctx=\(contextSize), limit=\(generationLimit), template=\(llama_model_chat_template(model, nil) != nil ? "model" : "none"), gpuLayers=\(activeGPULayers)\n")
 
 llama_memory_clear(llama_get_memory(context), true)
 
@@ -363,11 +415,15 @@ while promptOffset < tokens.count {
         batch.logits[i] = (promptOffset + i == tokens.count - 1) ? 1 : 0
     }
 
-    guard llama_decode(context, batch) == 0 else {
+    let promptRC = llama_decode(context, batch)
+    guard promptRC == 0 else {
+        let detail = "Failed while decoding prompt (rc=\(promptRC), offset=\(promptOffset), chunk=\(chunkCount), promptTokens=\(tokens.count), n_ctx=\(contextSize), gpuLayers=\(activeGPULayers))"
+        appendLlamaLog("[LocalLLM] \(detail)\n")
+        lastError = detail
         throw NSError(
             domain: "LocalLLM",
             code: 8,
-            userInfo: [NSLocalizedDescriptionKey: "Failed while decoding prompt"]
+            userInfo: [NSLocalizedDescriptionKey: detail]
         )
     }
 
@@ -393,6 +449,7 @@ llama_sampler_chain_add(sampler, llama_sampler_init_dist(UInt32.random(in: 0...U
 
 var output = ""
 var position = Int32(tokens.count)
+var generatedCount = 0
 
 for _ in 0..<generationLimit {
     let token = llama_sampler_sample(
@@ -448,17 +505,23 @@ for _ in 0..<generationLimit {
     batch.seq_id[0]![0] = 0
     batch.logits[0] = 1
 
-    guard llama_decode(context, batch) == 0 else {
+    let tokenRC = llama_decode(context, batch)
+    guard tokenRC == 0 else {
+        let detail = "Failed while generating token (rc=\(tokenRC), pos=\(position), token=\(token), generated=\(generatedCount), promptTokens=\(tokens.count), n_ctx=\(contextSize), gpuLayers=\(activeGPULayers))"
+        appendLlamaLog("[LocalLLM] \(detail)\n")
+        lastError = detail
         throw NSError(
             domain: "LocalLLM",
             code: 10,
-            userInfo: [NSLocalizedDescriptionKey: "Failed while generating token"]
+            userInfo: [NSLocalizedDescriptionKey: detail]
         )
     }
 
     position += 1
+    generatedCount += 1
 }
 
+appendLlamaLog("[LocalLLM] generate finished: \(generatedCount) tokens\n")
 let cleanedOutput = cleanModelOutput(output)
 
 return cleanedOutput.trimmingCharacters(in: .whitespacesAndNewlines)
